@@ -9,7 +9,9 @@ from transformers import AutoConfig
 
 from lmdeploy.vl.model.base import VISION_MODELS, VisonModel
 from lmdeploy.vl.model.utils import disable_logging
+from lmdeploy.utils import get_logger
 
+logger = get_logger('lmdeploy')
 
 @VISION_MODELS.register_module()
 class GLM4VisionModel(VisonModel):
@@ -45,6 +47,8 @@ class GLM4VisionModel(VisonModel):
 
         no_split_module_classes = ['TransformerLayer']
 
+        self.max_memory[0] = self.max_memory[0]//16 # decrease num of weights loaded in device:0
+        print(self.max_memory)
         device_map = infer_auto_device_map(
             model,
             no_split_module_classes=no_split_module_classes,
@@ -61,7 +65,8 @@ class GLM4VisionModel(VisonModel):
                 continue
             for k in keys[1:]:
                 device_map[k] = device_map[keys[0]]
-
+        # logger.info("vision model device map:")
+        # logger.info(device_map)
         with disable_logging():
             load_checkpoint_and_dispatch(
                 model=model,

@@ -510,7 +510,7 @@ class AsyncEngine(LogitsMixin):
                          f'Fallback to 1')
             gen_config.n = 1
         prompt = messages
-        self.request_logger.log_prompt(session_id=session_id, prompt=prompt)
+        # self.request_logger.log_prompt(session_id=session_id, prompt=prompt)
         prompt_input = await self._get_prompt_input(prompt,
                                                     do_preprocess,
                                                     sequence_start,
@@ -519,17 +519,17 @@ class AsyncEngine(LogitsMixin):
         prompt = prompt_input['prompt']
         input_ids = prompt_input['input_ids']
         finish_reason = None
-        self.request_logger.log_inputs(session_id=session_id,
-                                       prompt=prompt,
-                                       prompt_token_ids=input_ids,
-                                       gen_config=gen_config,
-                                       adapter_name=adapter_name)
-        logger.info(f'session_id={session_id}, '
-                    f'history_tokens={self.id2step[str(session_id)]}, '
-                    f'input_tokens={len(input_ids)}, '
-                    f'max_new_tokens={gen_config.max_new_tokens}, '
-                    f'seq_start={sequence_start}, seq_end={sequence_end}, '
-                    f'step={step}, prep={do_preprocess}')
+        # self.request_logger.log_inputs(session_id=session_id,
+        #                                prompt=prompt,
+        #                                prompt_token_ids=input_ids,
+        #                                gen_config=gen_config,
+        #                                adapter_name=adapter_name)
+        # logger.info(f'session_id={session_id}, '
+        #             f'history_tokens={self.id2step[str(session_id)]}, '
+        #             f'input_tokens={len(input_ids)}, '
+        #             f'max_new_tokens={gen_config.max_new_tokens}, '
+        #             f'seq_start={sequence_start}, seq_end={sequence_end}, '
+        #             f'step={step}, prep={do_preprocess}')
 
         if gen_config.max_new_tokens is None:
             # for interactive endpoint, will try maximum possible token num

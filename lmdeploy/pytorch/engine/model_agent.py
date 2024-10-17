@@ -611,7 +611,7 @@ class TPModelAgent(AutoModelAgent):
             ),
             nprocs=world_size - 1,
             join=False,
-            daemon=True,
+            daemon=True, # if daemon=True, parent process quits with subprocesses even if they are still running
         )
         _check_context_alive(self.mp_context)
 
