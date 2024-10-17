@@ -27,6 +27,8 @@ def load_weight(param: torch.nn.Parameter, loaded_weight: torch.Tensor,
                 **kwargs):
     """load weight."""
     if hasattr(param, 'weight_loader'):
+        from lmdeploy.pytorch.nn.linear import QKVBaseLinear
+        param:QKVBaseLinear=param # used for annotation
         param.weight_loader(param, loaded_weight, **kwargs)
     else:
         assert len(kwargs) == 0

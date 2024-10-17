@@ -1,6 +1,7 @@
 from openai import OpenAI
 from concurrent.futures import ThreadPoolExecutor
 import time
+from pathlib import Path
 import base64
 import time
  
@@ -14,30 +15,16 @@ def encode_image(img_path):
         b64_encoded = base64.b64encode(img.read()).decode("utf8")
     return "data:image/jpeg;base64,{}".format(b64_encoded)
 
-img_path="/home/gmcc/workspace/imagerecognition/test/results/1.png"
-usr_p = """你是一名优秀的AI图像识别助手。
-我会传给你一个身份证证照，请你按照给你的要求给出我需要的信息。
-我需要的信息名列表：
-[姓名，性别，民族，出生，住址，公民身份证号码，签发机关，有效期限]
-要求：
-1. 先列出图中未提及的信息名列表和提及的信息名列表
-2. 对于未提及的信息名，在json字段中返回"未提及"；对于提及的信息名，在json字段中返回对应信息
-注意：有些文字之间可能非常相似。如："5"跟"S"，"8"跟"B"，"Z"跟"2"。请你再三思考再做决定
-返回模板：
-图中未提及的信息名：[]
-图中提及的信息名：[]
+img_path=Path(__file__).parent.joinpath("jinzhe.jpg")
+usr_p = """
+这是一名游戏角色，
+请你识别出这个游戏名称与这个角色名称，并返回给我json格式如下：
 ```json
-{
-  "姓名":"姓名",
-  "性别":"性别",
-  "民族":"民族",
-  "出生":"出生",
-  "住址":"住址",
-  "公民身份证号码":"公民身份证号码",
-  "签发机关":"签发机关",
-  "有效期限":"有效期限"
-}
-```"""
+{"游戏":"","角色":""}
+```
+注意：
+1. 若是有字段不知道，可以填“不知道”。
+"""
 messages = [
     {
         "role": "user",
@@ -49,7 +36,7 @@ messages = [
             {
                 "type": "image_url",
                 "image_url": {
-                    "url": encode_image(img_path)
+                    "url": encode_image(str(img_path))
                 },
             },
         ],

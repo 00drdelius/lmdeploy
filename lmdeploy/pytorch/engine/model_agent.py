@@ -358,10 +358,34 @@ def _tp_build_model(
             update_custom_module_map(custom_module_map)
         if rank == 0:
             logger.info('build model.')
-        patched_model = build_patched_model(model_config, device=device_map)
+        patched_model:torch.nn.Module = build_patched_model(model_config, device=device_map)
+
+        #### log model device_map situation ####
+        # if world_size > 1:
+        #     loaded={}
+        #     for n,w in patched_model.named_parameters():
+        #         if w.device.index==rank:
+        #             if not loaded.get(rank,None): loaded[rank]=[]
+        #             loaded[rank].append(n)
+        # logger.info("################## model device map ####################")
+        # logger.info(loaded)
+        ### log model device_map situation ####
+
         if rank == 0:
             logger.info('loading weights.')
         load_model_weights(patched_model, model_path, device=device_map)
+
+
+        #### log weight device_map situation ####
+        # if world_size > 1:
+        #     loaded={}
+            # for n,w in patched_model.named_parameters():
+        #         if w.device.index==rank:
+        #             if not loaded.get(rank,None): loaded[rank]=[]
+        #             loaded[rank].append(n)
+        # logger.info("################## model device map ####################")
+        # logger.info(loaded)
+        #### log weight device_map situation ####
 
         if adapters is not None:
             if rank == 0:

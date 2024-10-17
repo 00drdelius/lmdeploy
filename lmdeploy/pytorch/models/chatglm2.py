@@ -554,7 +554,7 @@ class ChatGLMForConditionalGeneration(nn.Module, CudaGraphMixin):
     def load_weights(self, weights: Iterable[Tuple[str, torch.Tensor]]):
         """load weights."""
         # modify from vllm
-
+        from lmdeploy.pytorch.nn.linear import QKVBaseLinear
         params_dict = dict(self.named_parameters())
         for name, loaded_weight in weights:
             if 'transformer.vision' in name:
@@ -568,7 +568,7 @@ class ChatGLMForConditionalGeneration(nn.Module, CudaGraphMixin):
                     and 'output_layer.weight' in name):
                 continue
             if '.query_key_value' in name:
-                param = params_dict[name]
+                param:QKVBaseLinear = params_dict[name] # used for annotation
                 q, k, v = param.weight_spliter(loaded_weight)
                 load_weight(param, q, shard_id='q')
                 load_weight(param, k, shard_id='k')
