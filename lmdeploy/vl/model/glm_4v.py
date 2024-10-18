@@ -46,11 +46,12 @@ class GLM4VisionModel(VisonModel):
                 self.vl_model = model
 
         no_split_module_classes = ['TransformerLayer']
-        self.max_memory = {k:25769803776 for k in self.max_memory.keys() }  # 25769803776 == 23102MB*1024*1024
+        # self.max_memory = {k:25769803776 for k in self.max_memory.keys() }  # 25769803776 == 23102MB*1024*1024
 
         # decrease num of weights loaded in device:0.
-        # Cannot be too slow otherwise raise error: At least one of the model submodule will be offloaded to disk, please pass along an `offload_folder`.
-        self.max_memory[0] = self.max_memory[0]//16
+        # Cannot be too small otherwise raise error: At least one of the model submodule will be offloaded to disk, please pass along an `offload_folder`.
+        # 5 is optimal memory usage, cuz cache will be stored in all devices, hence too small may cause devices rank!=0 OOM.
+        self.max_memory[0] = self.max_memory[0]//5
         print(self.max_memory)
         device_map = infer_auto_device_map(
             model,

@@ -3,7 +3,9 @@ from lmdeploy.api import serve
 from lmdeploy import PytorchEngineConfig
 # glm-4v-9b only supports tensor parallelism = 2
 os.environ.setdefault('CUDA_VISIBLE_DEVICES',"2,3")
-model="/data/zszhangyk/Delius/models/glm-4v-9b"
+# model="/data/zszhangyk/Delius/models/glm-4v-9b"
+model="/models/glm-4v-9b"
+
 
   # --session-len 2560\ useless
   # --enable-prefix-caching\ faster than 2s but allocate memory more

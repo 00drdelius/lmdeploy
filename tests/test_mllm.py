@@ -1,5 +1,5 @@
 from openai import OpenAI
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor
 import time
 from pathlib import Path
 import base64
@@ -58,10 +58,11 @@ def single():
 
 def conc():
     workers=6
-    with ThreadPoolExecutor(max_workers=workers) as executor:
+    with ProcessPoolExecutor(max_workers=workers) as executor:
         tasks = [executor.submit(single) for _ in range(workers)]
         for fu in tasks:
             fu.result()
 
-single()
-print("\nTime consumed: ",time.time()-start)
+if __name__ == "__main__":
+    conc()
+    print("\nTime consumed: ",time.time()-start)
