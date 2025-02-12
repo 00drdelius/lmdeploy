@@ -10,6 +10,7 @@ import torch_npu
 from lmdeploy.pytorch.config import BackendConfig, CacheConfig, ModelConfig
 from lmdeploy.pytorch.model_inputs import StepContext
 from lmdeploy.pytorch.models.qwen2_vl import Qwen2VLForConditionalGeneration
+from lmdeploy.pytorch.models.qwen2_5_vl import Qwen2_5_VLForConditionalGeneration
 from lmdeploy.utils import get_logger
 
 from ...graph_runner import GraphRunner
@@ -37,7 +38,7 @@ class AscendGraphRunner(GraphRunner):
                                                           fullgraph=True,
                                                           dynamic=True,
                                                           backend='atbgraph')
-            elif isinstance(self.model, Qwen2VLForConditionalGeneration):
+            elif isinstance(self.model, (Qwen2VLForConditionalGeneration,Qwen2_5_VLForConditionalGeneration)):
                 self.model.model = torch.compile(self.model.model, fullgraph=True, dynamic=True, backend='atbgraph')
             else:
                 self.model = torch.compile(self.model, fullgraph=True, dynamic=True, backend='atbgraph')
