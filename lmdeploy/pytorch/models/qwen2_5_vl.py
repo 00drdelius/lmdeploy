@@ -16,7 +16,7 @@ from lmdeploy.pytorch.weight_loader.model_weight_loader import load_weight
 from .utils.cudagraph import CudaGraphMeta, CudaGraphMixin, next_power_of_2
 from .utils.model import DeployModelMixin
 from ...utils import get_logger
-
+from ..distributed import get_world_rank
 from transformers.models.qwen2_5_vl.configuration_qwen2_5_vl import Qwen2_5_VLVisionConfig, Qwen2_5_VLConfig
 
 logger = get_logger(__name__)
@@ -148,10 +148,10 @@ class Qwen2_5_VLPatchMerger(nn.Module):
 class Qwen2_5_VLVisionAttention(nn.Module):
     """Vision attention."""
 
-    def __init__(self, config: Qwen2_5_VLConfig, dtype: torch.dtype = None, device: torch.device = None):
+    def __init__(self, config: Qwen2_5_VLVisionConfig, dtype: torch.dtype = None, device: torch.device = None):
         super().__init__()
         quantization_config = getattr(config, 'quantization_config', None)
-        dim = config.embed_dim
+        dim = config.hidden_size
         num_heads = config.num_heads
         head_dim = dim // num_heads
         self.head_dim = head_dim
@@ -223,15 +223,16 @@ class Qwen2_5_VLVisionBlock(nn.Module):
         super().__init__()
         self.layer_idx = layer_idx
         super().__init__()
-        self.norm1 = RMSNorm(config.hidden_size, eps=1e-6)
-        self.norm2 = RMSNorm(config.hidden_size, eps=1e-6)
+        self.norm1 = RMSNorm(config.hidden_size, eps=1e-6, dtype=dtype, device=device)
+        self.norm2 = RMSNorm(config.hidden_size, eps=1e-6, dtype=dtype, device=device)
         self.attn = Qwen2_5_VLVisionAttention(config, dtype=dtype, device=device)
-        self.mlp = Qwen2_5_VLMLP(config, bias=True)
+        self.mlp = Qwen2_5_VLMLP(config, bias=True, dtype=dtype, device=device)
 
-    def forward(self, hidden_states,
-                cu_seqlens,
-                rotary_pos_emb,
+    def forward(self, hidden_states:torch.Tensor,
+                cu_seqlens:torch.Tensor,
+                rotary_pos_emb:tuple[torch.Tensor],
                 residual: Optional[torch.Tensor] = None) -> torch.Tensor:
+
         if residual is None:
             residual = hidden_states
             hidden_states = self.norm1(hidden_states)
@@ -262,13 +263,15 @@ class Qwen2_5_VisionTransformerPretrainedModel(nn.Module):
             temporal_patch_size=config.temporal_patch_size,
             in_channels=config.in_channels,
             embed_dim=config.hidden_size,
+            dtype=dtype,
+            device=device
         )
 
         head_dim = config.hidden_size // config.num_heads
         self.rotary_pos_emb = Qwen2_5_VisionRotaryEmbedding(head_dim // 2, device=device)
 
         self.blocks = nn.ModuleList(
-            [Qwen2_5_VLVisionBlock(config, config._attn_implementation) for _ in range(config.depth)]
+            [Qwen2_5_VLVisionBlock(config, layer_idx, dtype=dtype, device=device) for layer_idx in range(config.depth)]
         )
         self.merger = Qwen2_5_VLPatchMerger(
             dim=config.out_hidden_size,
@@ -348,6 +351,14 @@ class Qwen2_5_VisionTransformerPretrainedModel(nn.Module):
 
         return window_index, cu_window_seqlens
 
+    def slide_rotary_pos_emb(self,window_index:list,
+                             rotary_pos_emb: torch.Tensor,
+                             seq_len: int):
+        rotary_pos_emb = rotary_pos_emb.reshape(seq_len // self.spatial_merge_unit, self.spatial_merge_unit, -1)
+        rotary_pos_emb = rotary_pos_emb[window_index, :, :]
+        rotary_pos_emb = rotary_pos_emb.reshape(seq_len, -1)
+        return rotary_pos_emb
+
     def forward(self, hidden_states: torch.Tensor,
                 cu_seqlens: torch.Tensor,
                 rotary_pos_emb: torch.Tensor,
@@ -366,9 +377,9 @@ class Qwen2_5_VisionTransformerPretrainedModel(nn.Module):
         hidden_states = hidden_states.reshape(seq_len // self.spatial_merge_unit, self.spatial_merge_unit, -1)
         hidden_states = hidden_states[window_index, :, :]
         hidden_states = hidden_states.reshape(seq_len, -1)
-        rotary_pos_emb = rotary_pos_emb.reshape(seq_len // self.spatial_merge_unit, self.spatial_merge_unit, -1)
-        rotary_pos_emb = rotary_pos_emb[window_index, :, :]
-        rotary_pos_emb = rotary_pos_emb.reshape(seq_len, -1)
+        # rotary_pos_emb = rotary_pos_emb.reshape(seq_len // self.spatial_merge_unit, self.spatial_merge_unit, -1)
+        # rotary_pos_emb = rotary_pos_emb[window_index, :, :]
+        # rotary_pos_emb = rotary_pos_emb.reshape(seq_len, -1)
 
         # cu_seqlens = torch.repeat_interleave(grid_thw[:, 1] * grid_thw[:, 2], grid_thw[:, 0]).cumsum(
         #     dim=0,
@@ -379,17 +390,19 @@ class Qwen2_5_VisionTransformerPretrainedModel(nn.Module):
         #     dtype=grid_thw.dtype if torch.jit.is_tracing() else torch.int32,
         # )
         cu_seqlens = F.pad(cu_seqlens, (1, 0), value=0)
-
+        residual=None
         for layer_num, blk in enumerate(self.blocks):
             if layer_num in self.fullatt_block_indexes:
                 cu_seqlens_now = cu_seqlens
             else:
                 cu_seqlens_now = cu_window_seqlens
-            hidden_states = blk(
+            hidden_states, residual = blk(
                 hidden_states,
                 cu_seqlens=cu_seqlens_now,
                 rotary_pos_emb=rotary_pos_emb,
+                residual=residual
             )
+            hidden_states = hidden_states+residual
 
         hidden_states = self.merger(hidden_states)
         reverse_indices = torch.argsort(window_index)
@@ -483,6 +496,7 @@ class Qwen2_5_VLAttention(nn.Module):
         # o proj
         attn_output = self.o_proj(attn_output)
         return attn_output
+
 
 class Qwen2_5_VLDecoderLayer(nn.Module):
     def __init__(self,
@@ -632,7 +646,6 @@ class Qwen2_5_VLModel(nn.Module):
 
 
 class Qwen2_5_VLForConditionalGeneration(nn.Module, DeployModelMixin, CudaGraphMixin):
-    _no_split_modules = ["Qwen2VLDecoderLayer", "Qwen2_5_VLVisionBlock"]
 
     packed_modules_mapping = {
         'qkv_proj': [
@@ -741,6 +754,8 @@ class Qwen2_5_VLForConditionalGeneration(nn.Module, DeployModelMixin, CudaGraphM
         vis_cu_seqlens = None
         vis_pos_emb = None
         image_mask = None
+        cu_window_seqlens = None
+        window_index = None
         if context.input_multimodals is not None:
             image_data = [input_mm['image'] for input_mm in context.input_multimodals]
 
@@ -755,7 +770,7 @@ class Qwen2_5_VLForConditionalGeneration(nn.Module, DeployModelMixin, CudaGraphM
                 window_index, cu_window_seqlens = self.visual.get_window_index(grid_thw)
                 cu_window_seqlens = torch.tensor(
                     cu_window_seqlens,
-                    device="cpu",
+                    device=pixel_values.device,
                     dtype=torch.int32,
                 )
                 cu_window_seqlens = torch.unique_consecutive(cu_window_seqlens)
@@ -763,6 +778,8 @@ class Qwen2_5_VLForConditionalGeneration(nn.Module, DeployModelMixin, CudaGraphM
                 vis_cu_seqlens = torch.repeat_interleave(grid_thw[:, 1] * grid_thw[:, 2],
                                                          grid_thw[:, 0]).to(pixel_values.device)
                 vis_cu_seqlens = vis_cu_seqlens.cumsum(dim=0, dtype=torch.int32)
+                seq_len, _ = pixel_values.size()
+                vis_pos_emb = self.visual.slide_rotary_pos_emb(window_index, vis_pos_emb, seq_len)
                 vis_pos_emb = vis_pos_emb.repeat(1, 2)
                 vis_pos_emb = (vis_pos_emb.cos(), vis_pos_emb.sin())
 
