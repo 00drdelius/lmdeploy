@@ -1,5 +1,5 @@
 # Copyright (c) OpenMMLab. All rights reserved.
-from lmdeploy.pytorch.config import ModelConfig
+from lmdeploy.pytorch.config import ModelConfig, torch
 
 from .builder import AutoModelConfigBuilder
 
@@ -22,6 +22,7 @@ class DefaultModelConfigBuilder(AutoModelConfigBuilder):
         if use_sliding_window:
             sliding_window = getattr(hf_config, 'sliding_window', sliding_window) or -1
         tp = kwargs.get('tp', 1)
+        dtype = kwargs.get('dtype', getattr(hf_config,'torch_dtype',torch.float16))
         # update num_kv_heads for tp mode
         num_key_value_heads = cls.update_num_kv_heads(hf_config, tp, num_key_value_heads)
 
@@ -36,4 +37,5 @@ class DefaultModelConfigBuilder(AutoModelConfigBuilder):
             head_dim=head_dim,
             vocab_size=hf_config.vocab_size,
             hf_config=hf_config,
+            dtype=dtype
         )
