@@ -5,7 +5,9 @@ from pathlib import Path
 
 # model_path='/models/Qwen/Qwen2-VL-2B-Instruct'
 model_path='/models/Qwen/Qwen2.5-VL-3B-Instruct'
-img_path = str(Path(__file__).parent.joinpath("jinzhe.jpg").absolute())
+img_path = str(Path(__file__).parent.joinpath("jinzhe_1024.jpg").absolute())
+
+save_dir="/home/gmcc/workspace/repositories/site-packages/delius-lmdeploy/tests"
 
 backend_config = PytorchEngineConfig(
     dtype="bfloat16",
@@ -22,6 +24,17 @@ gen_config = GenerationConfig(
     temperature=0,
     skip_special_tokens=False
 )
+image = load_image(img_path)
+conversation = [
+    {"role":"system","content":"你是一名高级人工智能助手。"},
+    {
+        "role": "user",
+        "content": [
+            {"type": "text", "text": "描述下图片这个女孩"},
+            {"type": "image_data","image_data":{"data":image}},
+        ],
+    }
+]
 #TODO: 模型貌似没有获取到图像特征。模型看不到我传进去的图片
 if __name__ == '__main__':
     engine=pipeline(
@@ -29,8 +42,8 @@ if __name__ == '__main__':
         # backend='pytorch',
         model_path,
         backend_config=backend_config,
-        log_level="DEBUG",
+        log_level="INFO",
     )
-    image = load_image(img_path)
-    resp = engine(("请描述我发给你的图片",image),gen_config=gen_config)
+    # resp = engine(("描述下图片这个女孩",image),gen_config=gen_config)
+    resp = engine(conversation,gen_config=gen_config)
     print(resp)

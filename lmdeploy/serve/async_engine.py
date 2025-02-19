@@ -653,11 +653,11 @@ class AsyncEngine(LogitsMixin):
                                                         tools=tools)
             prompt = prompt_input['prompt']
             input_ids = prompt_input['input_ids']
-            # self.request_logger.log_inputs(session_id=session_id,
-            #                                prompt=prompt,
-            #                                prompt_token_ids=input_ids,
-            #                                gen_config=gen_config,
-            #                                adapter_name=adapter_name)
+            self.request_logger.log_inputs(session_id=session_id,
+                                           prompt=prompt,
+                                           prompt_token_ids=input_ids,
+                                           gen_config=gen_config,
+                                           adapter_name=adapter_name)
             logger.info(f'session={session_id}, '
                         f'history_tokens={self.id2step[session_id]}, '
                         f'input_tokens={len(input_ids)}, '
